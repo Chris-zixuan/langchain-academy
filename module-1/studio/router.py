@@ -3,7 +3,7 @@ from langgraph.graph import MessagesState
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 
-# Tool
+# 工具
 def multiply(a: int, b: int) -> int:
     """Multiplies a and b.
 
@@ -13,26 +13,26 @@ def multiply(a: int, b: int) -> int:
     """
     return a * b
 
-# LLM with bound tool
+# LLM 并绑定工具
 llm = ChatDeepSeek(model="deepseek-chat")
 llm_with_tools = llm.bind_tools([multiply])
 
-# Node
+# 节点
 def tool_calling_llm(state: MessagesState):
     return {"messages": [llm_with_tools.invoke(state["messages"])]}
 
-# Build graph
+# 构建图
 builder = StateGraph(MessagesState)
 builder.add_node("tool_calling_llm", tool_calling_llm)
 builder.add_node("tools", ToolNode([multiply]))
 builder.add_edge(START, "tool_calling_llm")
 builder.add_conditional_edges(
     "tool_calling_llm",
-    # If the latest message (result) from assistant is a tool call -> tools_condition routes to tools
-    # If the latest message (result) from assistant is a not a tool call -> tools_condition routes to END
+    # 如果 assistant 的最新消息（结果）是工具调用 -> tools_condition 路由到 tools
+    # 如果 assistant 的最新消息（结果）不是工具调用 -> tools_condition 路由到 END
     tools_condition,
 )
 builder.add_edge("tools", END)
 
-# Compile graph
+# 编译图
 graph = builder.compile()

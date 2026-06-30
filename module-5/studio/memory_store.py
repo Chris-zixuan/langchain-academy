@@ -5,15 +5,15 @@ from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.store.base import BaseStore
 import configuration
 
-# Initialize the LLM
-model = ChatDeepSeek(model="deepseek-chat", temperature=0) 
+# 初始化 LLM
+model = ChatDeepSeek(model="deepseek-chat", temperature=0)
 
-# Chatbot instruction
-MODEL_SYSTEM_MESSAGE = """You are a helpful assistant with memory that provides information about the user. 
+# 聊天机器人指令
+MODEL_SYSTEM_MESSAGE = """You are a helpful assistant with memory that provides information about the user.
 If you have memory for this user, use it to personalize your responses.
 Here is the memory (it may be empty): {memory}"""
 
-# Create new memory from the chat history and any existing memory
+# 从聊天历史和现有记忆中创建新记忆
 CREATE_MEMORY_INSTRUCTION = """"You are collecting information about the user to personalize your responses.
 
 CURRENT USER INFORMATION:
@@ -37,64 +37,64 @@ Based on the chat history below, please update the user information:"""
 
 def call_model(state: MessagesState, config: RunnableConfig, store: BaseStore):
 
-    """Load memory from the store and use it to personalize the chatbot's response."""
-    
-    # Get configuration
+    """从存储中加载记忆，并用其个性化聊天机器人的回答。"""
+
+    # 获取配置
     configurable = configuration.Configuration.from_runnable_config(config)
 
-    # Get the user ID from the config
+    # 从配置中获取用户 ID
     user_id = configurable.user_id
 
-    # Retrieve memory from the store
+    # 从存储中检索记忆
     namespace = ("memory", user_id)
     key = "user_memory"
     existing_memory = store.get(namespace, key)
 
-    # Extract the memory
+    # 提取记忆
     if existing_memory:
-        # Value is a dictionary with a memory key
+        # 值是一个包含 memory 键的字典
         existing_memory_content = existing_memory.value.get('memory')
     else:
         existing_memory_content = "No existing memory found."
 
-    # Format the memory in the system prompt
+    # 在系统提示中格式化记忆
     system_msg = MODEL_SYSTEM_MESSAGE.format(memory=existing_memory_content)
 
-    # Respond using memory as well as the chat history
+    # 使用记忆和聊天历史进行回答
     response = model.invoke([SystemMessage(content=system_msg)]+state["messages"])
 
     return {"messages": response}
 
 def write_memory(state: MessagesState, config: RunnableConfig, store: BaseStore):
 
-    """Reflect on the chat history and save a memory to the store."""
-    
-    # Get configuration
+    """反思聊天历史，并将记忆保存到存储中。"""
+
+    # 获取配置
     configurable = configuration.Configuration.from_runnable_config(config)
 
-    # Get the user ID from the config
+    # 从配置中获取用户 ID
     user_id = configurable.user_id
 
-    # Retrieve existing memory from the store
+    # 从存储中检索现有记忆
     namespace = ("memory", user_id)
     existing_memory = store.get(namespace, "user_memory")
 
-    # Extract the memory
+    # 提取记忆
     if existing_memory:
-        # Value is a dictionary with a memory key
+        # 值是一个包含 memory 键的字典
         existing_memory_content = existing_memory.value.get('memory')
     else:
         existing_memory_content = "No existing memory found."
-        
-    # Format the memory in the system prompt
+
+    # 在系统提示中格式化记忆
     system_msg = CREATE_MEMORY_INSTRUCTION.format(memory=existing_memory_content)
     new_memory = model.invoke([SystemMessage(content=system_msg)]+state['messages'])
 
-    # Overwrite the existing memory in the store 
+    # 覆盖存储中的现有记忆
     key = "user_memory"
     store.put(namespace, key, {"memory": new_memory.content})
 
-# Define the graph
+# 定义图
 builder = StateGraph(MessagesState,config_schema=configuration.Configuration)
 builder.add_node("call_model", call_model)
 builder.add_node("write_memory", write_memory)

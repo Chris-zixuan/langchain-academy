@@ -4,7 +4,7 @@ from typing import Annotated, List
 from typing_extensions import TypedDict
 
 from langchain_community.document_loaders import WikipediaLoader
-from langchain_tavily import TavilySearch  # updated 1.0
+from langchain_tavily import TavilySearch  # 在 1.0 中更新
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, get_buffer_string
 from langchain_deepseek import ChatDeepSeek
 
@@ -13,7 +13,7 @@ from langgraph.graph import END, MessagesState, START, StateGraph
 
 ### LLM
 
-llm = ChatDeepSeek(model="deepseek-chat", temperature=0) 
+llm = ChatDeepSeek(model="deepseek-chat", temperature=0)
 
 ### Schema 
 
@@ -40,33 +40,33 @@ class Perspectives(BaseModel):
     )
 
 class GenerateAnalystsState(TypedDict):
-    topic: str # Research topic
-    max_analysts: int # Number of analysts
-    human_analyst_feedback: str # Human feedback
-    analysts: List[Analyst] # Analyst asking questions
+    topic: str # 研究主题
+    max_analysts: int # 分析师数量
+    human_analyst_feedback: str # 人类反馈
+    analysts: List[Analyst] # 正在提问的分析师
 
 class InterviewState(MessagesState):
-    max_num_turns: int # Number turns of conversation
-    context: Annotated[list, operator.add] # Source docs
-    analyst: Analyst # Analyst asking questions
-    interview: str # Interview transcript
-    sections: list # Final key we duplicate in outer state for Send() API
+    max_num_turns: int # 对话轮数
+    context: Annotated[list, operator.add] # 来源文档
+    analyst: Analyst # 正在提问的分析师
+    interview: str # 访谈文本记录
+    sections: list # 最终键，我们在外层状态中为 Send() API 复制该键
 
 class SearchQuery(BaseModel):
-    search_query: str = Field(None, description="Search query for retrieval.")
+    search_query: str = Field(None, description="用于检索的搜索查询。")
 
 class ResearchGraphState(TypedDict):
-    topic: str # Research topic
-    max_analysts: int # Number of analysts
-    human_analyst_feedback: str # Human feedback
-    analysts: List[Analyst] # Analyst asking questions
-    sections: Annotated[list, operator.add] # Send() API key
-    introduction: str # Introduction for the final report
-    content: str # Content for the final report
-    conclusion: str # Conclusion for the final report
-    final_report: str # Final report
+    topic: str # 研究主题
+    max_analysts: int # 分析师数量
+    human_analyst_feedback: str # 人类反馈
+    analysts: List[Analyst] # 正在提问的分析师
+    sections: Annotated[list, operator.add] # Send() API 键
+    introduction: str # 最终报告的引言
+    content: str # 最终报告的内容
+    conclusion: str # 最终报告的结论
+    final_report: str # 最终报告
 
-### Nodes and edges
+### 节点和边
 
 analyst_instructions="""You are tasked with creating a set of AI analyst personas. Follow these instructions carefully:
 
@@ -84,32 +84,32 @@ analyst_instructions="""You are tasked with creating a set of AI analyst persona
 5. Assign one analyst to each theme."""
 
 def create_analysts(state: GenerateAnalystsState):
-    
-    """ Create analysts """
-    
+
+    """ 创建分析师 """
+
     topic=state['topic']
     max_analysts=state['max_analysts']
     human_analyst_feedback=state.get('human_analyst_feedback', '')
-        
-    # Enforce structured output
+
+    # 强制结构化输出
     structured_llm = llm.with_structured_output(Perspectives)
 
-    # System message
+    # 系统消息
     system_message = analyst_instructions.format(topic=topic,
-                                                            human_analyst_feedback=human_analyst_feedback, 
+                                                            human_analyst_feedback=human_analyst_feedback,
                                                             max_analysts=max_analysts)
 
-    # Generate question 
+    # 生成问题
     analysts = structured_llm.invoke([SystemMessage(content=system_message)]+[HumanMessage(content="Generate the set of analysts.")])
-    
-    # Write the list of analysis to state
+
+    # 将分析师列表写入状态
     return {"analysts": analysts.analysts}
 
 def human_feedback(state: GenerateAnalystsState):
-    """ No-op node that should be interrupted on """
+    """ 空操作节点，在此处中断 """
     pass
 
-# Generate analyst question
+# 生成分析师问题
 question_instructions = """You are an analyst tasked with interviewing an expert to learn about a specific topic. 
 
 Your goal is boil down to interesting and specific insights related to your topic.
@@ -130,20 +130,20 @@ Remember to stay in character throughout your response, reflecting the persona a
 
 def generate_question(state: InterviewState):
 
-    """ Node to generate a question """
+    """ 用于生成问题的节点 """
 
-    # Get state
+    # 获取状态
     analyst = state["analyst"]
     messages = state["messages"]
 
-    # Generate question 
+    # 生成问题
     system_message = question_instructions.format(goals=analyst.persona)
     question = llm.invoke([SystemMessage(content=system_message)]+messages)
-        
-    # Write messages to state
+
+    # 将消息写入状态
     return {"messages": [question]}
 
-# Search query writing
+# 搜索查询编写
 search_instructions = SystemMessage(content=f"""You will be given a conversation between an analyst and an expert. 
 
 Your goal is to generate a well-structured query for use in retrieval and / or web-search related to the conversation.
@@ -155,21 +155,21 @@ Pay particular attention to the final question posed by the analyst.
 Convert this final question into a well-structured web search query""")
 
 def search_web(state: InterviewState):
-    
-    """ Retrieve docs from web search """
 
-    # Search
+    """ 从网络搜索中检索文档 """
+
+    # 搜索
     tavily_search = TavilySearch(max_results=3)
 
-    # Search query
+    # 搜索查询
     structured_llm = llm.with_structured_output(SearchQuery)
     search_query = structured_llm.invoke([search_instructions]+state['messages'])
-    
-    # Search
+
+    # 搜索
     data = tavily_search.invoke({"query": search_query.search_query})
     search_docs = data.get("results", data)
 
-     # Format
+     # 格式化
     formatted_search_docs = "\n\n---\n\n".join(
         [
             f'<Document href="{doc["url"]}"/>\n{doc["content"]}\n</Document>'
@@ -177,21 +177,21 @@ def search_web(state: InterviewState):
         ]
     )
 
-    return {"context": [formatted_search_docs]} 
+    return {"context": [formatted_search_docs]}
 
 def search_wikipedia(state: InterviewState):
-    
-    """ Retrieve docs from wikipedia """
 
-    # Search query
+    """ 从 Wikipedia 检索文档 """
+
+    # 搜索查询
     structured_llm = llm.with_structured_output(SearchQuery)
     search_query = structured_llm.invoke([search_instructions]+state['messages'])
-    
-    # Search
-    search_docs = WikipediaLoader(query=search_query.search_query, 
+
+    # 搜索
+    search_docs = WikipediaLoader(query=search_query.search_query,
                                   load_max_docs=2).load()
 
-     # Format
+     # 格式化
     formatted_search_docs = "\n\n---\n\n".join(
         [
             f'<Document source="{doc.metadata["source"]}" page="{doc.metadata.get("page", "")}"/>\n{doc.page_content}\n</Document>'
@@ -199,9 +199,9 @@ def search_wikipedia(state: InterviewState):
         ]
     )
 
-    return {"context": [formatted_search_docs]} 
+    return {"context": [formatted_search_docs]}
 
-# Generate expert answer
+# 生成专家答案
 answer_instructions = """You are an expert being interviewed by an analyst.
 
 Here is analyst area of focus: {goals}. 
@@ -231,64 +231,64 @@ When answering questions, follow these guidelines:
 And skip the addition of the brackets as well as the Document source preamble in your citation."""
 
 def generate_answer(state: InterviewState):
-    
-    """ Node to answer a question """
 
-    # Get state
+    """ 用于回答问题的节点 """
+
+    # 获取状态
     analyst = state["analyst"]
     messages = state["messages"]
     context = state["context"]
 
-    # Answer question
+    # 回答问题
     system_message = answer_instructions.format(goals=analyst.persona, context=context)
     answer = llm.invoke([SystemMessage(content=system_message)]+messages)
-            
-    # Name the message as coming from the expert
+
+    # 将消息命名为来自专家
     answer.name = "expert"
-    
-    # Append it to state
+
+    # 追加到状态
     return {"messages": [answer]}
 
 def save_interview(state: InterviewState):
-    
-    """ Save interviews """
 
-    # Get messages
+    """ 保存访谈记录 """
+
+    # 获取消息
     messages = state["messages"]
-    
-    # Convert interview to a string
+
+    # 将访谈转换为字符串
     interview = get_buffer_string(messages)
-    
-    # Save to interviews key
+
+    # 保存到 interviews 键
     return {"interview": interview}
 
-def route_messages(state: InterviewState, 
+def route_messages(state: InterviewState,
                    name: str = "expert"):
 
-    """ Route between question and answer """
-    
-    # Get messages
+    """ 在问题和答案之间进行路由 """
+
+    # 获取消息
     messages = state["messages"]
     max_num_turns = state.get('max_num_turns',2)
 
-    # Check the number of expert answers 
+    # 检查专家回答的数量
     num_responses = len(
         [m for m in messages if isinstance(m, AIMessage) and m.name == name]
     )
 
-    # End if expert has answered more than the max turns
+    # 如果专家回答的轮数已超过最大限制，则结束
     if num_responses >= max_num_turns:
         return 'save_interview'
 
-    # This router is run after each question - answer pair 
-    # Get the last question asked to check if it signals the end of discussion
+    # 此路由器在每对问答后运行
+    # 获取最后提出的问题，检查是否标志对话结束
     last_question = messages[-2]
-    
+
     if "Thank you so much for your help" in last_question.content:
         return 'save_interview'
     return "ask_question"
 
-# Write a summary (section of the final report) of the interview
+# 撰写访谈摘要（最终报告的一个 section）
 section_writer_instructions = """You are an expert technical writer. 
             
 Your task is to create a short, easily digestible section of a report based on a set of source documents.
@@ -342,21 +342,21 @@ There should be no redundant sources. It should simply be:
 
 def write_section(state: InterviewState):
 
-    """ Node to write a section """
+    """ 用于撰写 section 的节点 """
 
-    # Get state
+    # 获取状态
     interview = state["interview"]
     context = state["context"]
     analyst = state["analyst"]
-   
-    # Write section using either the gathered source docs from interview (context) or the interview itself (interview)
+
+    # 使用从访谈中收集的来源文档（context）或访谈本身（interview）来撰写 section
     system_message = section_writer_instructions.format(focus=analyst.description)
-    section = llm.invoke([SystemMessage(content=system_message)]+[HumanMessage(content=f"Use this source to write your section: {context}")]) 
-                
-    # Append it to state
+    section = llm.invoke([SystemMessage(content=system_message)]+[HumanMessage(content=f"Use this source to write your section: {context}")])
+
+    # 追加到状态
     return {"sections": [section.content]}
 
-# Add nodes and edges 
+# 添加节点和边
 interview_builder = StateGraph(InterviewState)
 interview_builder.add_node("ask_question", generate_question)
 interview_builder.add_node("search_web", search_web)
@@ -365,7 +365,7 @@ interview_builder.add_node("answer_question", generate_answer)
 interview_builder.add_node("save_interview", save_interview)
 interview_builder.add_node("write_section", write_section)
 
-# Flow
+# 流程
 interview_builder.add_edge(START, "ask_question")
 interview_builder.add_edge("ask_question", "search_web")
 interview_builder.add_edge("ask_question", "search_wikipedia")
@@ -377,15 +377,15 @@ interview_builder.add_edge("write_section", END)
 
 def initiate_all_interviews(state: ResearchGraphState):
 
-    """ Conditional edge to initiate all interviews via Send() API or return to create_analysts """    
+    """ 通过 Send() API 启动所有访谈或返回到 create_analysts 的条件边 """
 
-    # Check if human feedback
+    # 检查是否有用户反馈
     human_analyst_feedback=state.get('human_analyst_feedback','approve')
     if human_analyst_feedback.lower() != 'approve':
-        # Return to create_analysts
+        # 返回 create_analysts
         return "create_analysts"
 
-    # Otherwise kick off interviews in parallel via Send() API
+    # 否则通过 Send() API 并行启动访谈
     else:
         topic = state["topic"]
         return [Send("conduct_interview", {"analyst": analyst,
@@ -394,7 +394,7 @@ def initiate_all_interviews(state: ResearchGraphState):
                                            )
                                                        ]}) for analyst in state["analysts"]]
 
-# Write a report based on the interviews
+# 基于访谈撰写报告
 report_writer_instructions = """You are a technical writer creating a report on this overall topic: 
 
 {topic}
@@ -431,21 +431,21 @@ Here are the memos from your analysts to build your report from:
 
 def write_report(state: ResearchGraphState):
 
-    """ Node to write the final report body """
+    """ 用于撰写最终报告正文的节点 """
 
-    # Full set of sections
+    # 完整的 sections 集合
     sections = state["sections"]
     topic = state["topic"]
 
-    # Concat all sections together
+    # 将所有 sections 拼接在一起
     formatted_str_sections = "\n\n".join([f"{section}" for section in sections])
-    
-    # Summarize the sections into a final report
-    system_message = report_writer_instructions.format(topic=topic, context=formatted_str_sections)    
-    report = llm.invoke([SystemMessage(content=system_message)]+[HumanMessage(content=f"Write a report based upon these memos.")]) 
+
+    # 将 sections 总结为最终报告
+    system_message = report_writer_instructions.format(topic=topic, context=formatted_str_sections)
+    report = llm.invoke([SystemMessage(content=system_message)]+[HumanMessage(content=f"Write a report based upon these memos.")])
     return {"content": report.content}
 
-# Write the introduction or conclusion
+# 撰写引言或结论
 intro_conclusion_instructions = """You are a technical writer finishing a report on {topic}
 
 You will be given all of the sections of the report.
@@ -470,43 +470,43 @@ Here are the sections to reflect on for writing: {formatted_str_sections}"""
 
 def write_introduction(state: ResearchGraphState):
 
-    """ Node to write the introduction """
+    """ 用于撰写引言的节点 """
 
-    # Full set of sections
+    # 完整的 sections 集合
     sections = state["sections"]
     topic = state["topic"]
 
-    # Concat all sections together
+    # 将所有 sections 拼接在一起
     formatted_str_sections = "\n\n".join([f"{section}" for section in sections])
-    
-    # Summarize the sections into a final report
-    
-    instructions = intro_conclusion_instructions.format(topic=topic, formatted_str_sections=formatted_str_sections)    
-    intro = llm.invoke([instructions]+[HumanMessage(content=f"Write the report introduction")]) 
+
+    # 将 sections 总结为最终报告
+
+    instructions = intro_conclusion_instructions.format(topic=topic, formatted_str_sections=formatted_str_sections)
+    intro = llm.invoke([instructions]+[HumanMessage(content=f"Write the report introduction")])
     return {"introduction": intro.content}
 
 def write_conclusion(state: ResearchGraphState):
 
-    """ Node to write the conclusion """
+    """ 用于撰写结论的节点 """
 
-    # Full set of sections
+    # 完整的 sections 集合
     sections = state["sections"]
     topic = state["topic"]
 
-    # Concat all sections together
+    # 将所有 sections 拼接在一起
     formatted_str_sections = "\n\n".join([f"{section}" for section in sections])
-    
-    # Summarize the sections into a final report
-    
-    instructions = intro_conclusion_instructions.format(topic=topic, formatted_str_sections=formatted_str_sections)    
-    conclusion = llm.invoke([instructions]+[HumanMessage(content=f"Write the report conclusion")]) 
+
+    # 将 sections 总结为最终报告
+
+    instructions = intro_conclusion_instructions.format(topic=topic, formatted_str_sections=formatted_str_sections)
+    conclusion = llm.invoke([instructions]+[HumanMessage(content=f"Write the report conclusion")])
     return {"conclusion": conclusion.content}
 
 def finalize_report(state: ResearchGraphState):
 
-    """ The is the "reduce" step where we gather all the sections, combine them, and reflect on them to write the intro/conclusion """
+    """ 这是 "reduce" 步骤，我们收集所有 sections，组合它们，并基于它们撰写引言/结论 """
 
-    # Save full final report
+    # 保存完整的最终报告
     content = state["content"]
     if content.startswith("## Insights"):
         content = content.strip("## Insights")
@@ -523,7 +523,7 @@ def finalize_report(state: ResearchGraphState):
         final_report += "\n\n## Sources\n" + sources
     return {"final_report": final_report}
 
-# Add nodes and edges 
+# 添加节点和边
 builder = StateGraph(ResearchGraphState)
 builder.add_node("create_analysts", create_analysts)
 builder.add_node("human_feedback", human_feedback)
@@ -533,7 +533,7 @@ builder.add_node("write_introduction",write_introduction)
 builder.add_node("write_conclusion",write_conclusion)
 builder.add_node("finalize_report",finalize_report)
 
-# Logic
+# 逻辑
 builder.add_edge(START, "create_analysts")
 builder.add_edge("create_analysts", "human_feedback")
 builder.add_conditional_edges("human_feedback", initiate_all_interviews, ["create_analysts", "conduct_interview"])
@@ -543,5 +543,5 @@ builder.add_edge("conduct_interview", "write_conclusion")
 builder.add_edge(["write_conclusion", "write_report", "write_introduction"], "finalize_report")
 builder.add_edge("finalize_report", END)
 
-# Compile
+# 编译
 graph = builder.compile(interrupt_before=['human_feedback'])

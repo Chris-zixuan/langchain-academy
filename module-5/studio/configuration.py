@@ -8,14 +8,14 @@ from dataclasses import dataclass
 
 @dataclass(kw_only=True)
 class Configuration:
-    """The configurable fields for the chatbot."""
+    """聊天机器人的可配置字段。"""
     user_id: str = "default-user"
 
     @classmethod
     def from_runnable_config(
         cls, config: Optional[RunnableConfig] = None
     ) -> "Configuration":
-        """Create a Configuration instance from a RunnableConfig."""
+        """从 RunnableConfig 创建 Configuration 实例。"""
         configurable = (
             config["configurable"] if config and "configurable" in config else {}
         )

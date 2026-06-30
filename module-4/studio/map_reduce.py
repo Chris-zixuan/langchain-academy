@@ -9,15 +9,15 @@ from langchain_deepseek import ChatDeepSeek
 from langgraph.constants import Send
 from langgraph.graph import END, StateGraph, START
 
-# Prompts we will use
+# 我们将使用的提示
 subjects_prompt = """Generate a list of 3 sub-topics that are all related to this overall topic: {topic}."""
 joke_prompt = """Generate a joke about {subject}"""
 best_joke_prompt = """Below are a bunch of jokes about {topic}. Select the best one! Return the ID of the best one, starting 0 as the ID for the first joke. Jokes: \n\n  {jokes}"""
 
 # LLM
-model = ChatDeepSeek(model="deepseek-chat", temperature=0) 
+model = ChatDeepSeek(model="deepseek-chat", temperature=0)
 
-# Define the state
+# 定义状态
 class Subjects(BaseModel):
     subjects: list[str]
 
@@ -55,7 +55,7 @@ def best_joke(state: OverallState):
 def continue_to_jokes(state: OverallState):
     return [Send("generate_joke", {"subject": s}) for s in state["subjects"]]
 
-# Construct the graph: here we put everything together to construct our graph
+# 构建图：我们将所有内容组合在一起来构建我们的图
 graph_builder = StateGraph(OverallState)
 graph_builder.add_node("generate_topics", generate_topics)
 graph_builder.add_node("generate_joke", generate_joke)
@@ -65,5 +65,5 @@ graph_builder.add_conditional_edges("generate_topics", continue_to_jokes, ["gene
 graph_builder.add_edge("generate_joke", "best_joke")
 graph_builder.add_edge("best_joke", END)
 
-# Compile the graph
+# 编译图
 graph = graph_builder.compile()
